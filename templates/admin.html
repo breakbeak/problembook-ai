@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 문제집 관리자</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main class="card">
+<div class="top"><h1>⚙️ 관리자</h1><form method="post" action="/admin/logout"><button type="submit" class="secondary">로그아웃</button></form></div>
+
+<h2>🔑 API 키 저장</h2>
+<p>아래 칸에 API 키를 넣고 <b>저장</b>을 누르세요.</p>
+<form id="keyForm">
+<input id="apiKey" name="api_key" type="password" placeholder="API 키 입력" autocomplete="off" spellcheck="false">
+<div class="row"><button id="saveBtn" type="submit">💾 API 키 저장</button>
+<button id="testBtn" type="button" class="secondary">🔌 연결 테스트</button></div>
+</form>
+<div id="keyStatus" class="status">현재 저장 상태: {% if has_key %}✅ 저장됨{% else %}⚠️ 아직 저장 안 됨{% endif %}</div>
+
+<hr><h2>👥 사용자 계정 만들기</h2>
+<form id="userForm">
+<input id="newUser" name="username" placeholder="아이디 (3자 이상)" autocomplete="off">
+<input id="newPass" name="password" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="new-password">
+<button id="userBtn" type="submit">👤 계정 만들기</button>
+</form><div id="userStatus" class="status"></div>
+
+<hr><h2>🌐 사용자 사이트</h2><a class="button" href="/">사용자 사이트 열기</a>
+</main>
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  const keyForm=document.getElementById("keyForm"), keyStatus=document.getElementById("keyStatus");
+  const saveBtn=document.getElementById("saveBtn"), testBtn=document.getElementById("testBtn");
+  const userForm=document.getElementById("userForm"), userStatus=document.getElementById("userStatus");
+  function msg(el,text,ok){el.textContent=text;el.className="status "+(ok?"ok":"err");}
+  keyForm.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const key=document.getElementById("apiKey").value.trim();
+    if(!key){msg(keyStatus,"❌ API 키를 입력해 주세요.",false);return;}
+    saveBtn.disabled=true; saveBtn.textContent="⏳ 저장 중...";
+    try{
+      const fd=new FormData(); fd.append("api_key",key);
+      const r=await fetch("/admin/save-key",{method:"POST",body:fd,credentials:"same-origin"});
+      const j=await r.json();
+      if(!r.ok || !j.ok) throw new Error(j.error||"저장 실패");
+      msg(keyStatus,"✅ API 키가 저장됐습니다!",true);
+      document.getElementById("apiKey").value="";
+    }catch(err){msg(keyStatus,"❌ "+err.message,false);}
+    finally{saveBtn.disabled=false;saveBtn.textContent="💾 API 키 저장";}
+  });
+  testBtn.addEventListener("click", async function(){
+    testBtn.disabled=true; testBtn.textContent="⏳ 테스트 중...";
+    try{
+      const r=await fetch("/admin/test",{method:"POST",credentials:"same-origin"});
+      const j=await r.json();
+      if(!r.ok || !j.ok) throw new Error(j.error||"연결 실패");
+      msg(keyStatus,"✅ API 연결 성공!",true);
+    }catch(err){msg(keyStatus,"❌ "+err.message,false);}
+    finally{testBtn.disabled=false;testBtn.textContent="🔌 연결 테스트";}
+  });
+  userForm.addEventListener("submit", async function(e){
+    e.preventDefault();
+    const username=document.getElementById("newUser").value.trim();
+    const password=document.getElementById("newPass").value;
+    if(username.length<3){msg(userStatus,"❌ 아이디는 3자 이상이어야 합니다.",false);return;}
+    if(password.length<6){msg(userStatus,"❌ 비밀번호는 6자 이상이어야 합니다.",false);return;}
+    const btn=document.getElementById("userBtn"); btn.disabled=true; btn.textContent="⏳ 저장 중...";
+    try{
+      const fd=new FormData(); fd.append("username",username); fd.append("password",password);
+      const r=await fetch("/admin/create-user",{method:"POST",body:fd,credentials:"same-origin"});
+      const j=await r.json();
+      if(!r.ok || !j.ok) throw new Error(j.error||"계정 생성 실패");
+      msg(userStatus,"✅ 계정이 저장됐습니다!",true); userForm.reset();
+    }catch(err){msg(userStatus,"❌ "+err.message,false);}
+    finally{btn.disabled=false;btn.textContent="👤 계정 만들기";}
+  });
+});
+</script></body></html>

@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>관리자 로그인</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main class="card small"><h1>🔐 관리자 로그인</h1>
+<form method="post" action="/admin/login">
+<input name="username" placeholder="관리자 아이디" autocomplete="username" required>
+<input name="password" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+<button>로그인</button></form>{% if error %}<p class="err">{{error}}</p>{% endif %}</main></body></html>

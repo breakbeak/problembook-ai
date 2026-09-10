@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 문제집</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main class="card"><div class="top"><h1>📚 AI 문제집</h1>
+<form method="post" action="/logout"><button type="submit" class="secondary">로그아웃</button></form></div>
+<p>갤러리 사진, 카메라 사진, PDF와 문서를 올려보세요.</p>
+
+<label class="upload">🖼️ 갤러리에서 사진 선택
+<input id="photos" type="file" accept="image/*" multiple></label>
+<div id="photosName" class="filename">선택된 사진 없음</div>
+
+<label class="upload">📷 카메라로 촬영
+<input id="camera" type="file" accept="image/*" capture="environment"></label>
+<div id="cameraName" class="filename">촬영된 사진 없음</div>
+
+<label class="upload">📁 PDF / 문서 선택
+<input id="docs" type="file" accept=".pdf,.txt,.md,.csv,.docx,.pptx,.xlsx" multiple></label>
+<div id="docsName" class="filename">선택된 문서 없음</div>
+
+<button id="analyzeBtn" type="button">🤖 AI로 분석하기</button>
+<p id="status" class="status"></p><section id="result"></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function showNames(input, target){
+  const fs=[...input.files];
+  $(target).textContent=fs.length ? fs.map(f=>f.name).join(', ') : '선택된 파일 없음';
+}
+$('photos').addEventListener('change',()=>showNames($('photos'),'photosName'));
+$('camera').addEventListener('change',()=>showNames($('camera'),'cameraName'));
+$('docs').addEventListener('change',()=>showNames($('docs'),'docsName'));
+
+$('analyzeBtn').addEventListener('click', async ()=>{
+  const all=[...$('photos').files,...$('camera').files,...$('docs').files];
+  if(!all.length){ $('status').textContent='⚠️ 먼저 사진이나 파일을 선택해 주세요.'; return; }
+
+  const btn=$('analyzeBtn'); btn.disabled=true; btn.textContent='⏳ 분석 중...';
+  $('status').textContent='⏳ AI가 문제를 읽고 있습니다...'; $('result').innerHTML='';
+  const fd=new FormData(); all.forEach(f=>fd.append('files',f));
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',body:fd});
+    const text=await r.text(); let j;
+    try{j=JSON.parse(text)}catch(e){throw new Error('서버가 올바른 응답을 보내지 않았습니다.')}
+    if(r.status===401){location.href='/login';return}
+    if(!r.ok) throw new Error(j.error||'분석에 실패했습니다.');
+    $('status').textContent='✅ 분석 완료!';
+    let h='<h2>요약</h2><p>'+esc(j.summary||'')+'</p>';
+    for(const p of (j.problems||[])){
+      h+=`<article><h2>${esc(p.number||'문제')}</h2>
+      <p><b>문제:</b> ${esc(p.problem||'')}</p><p><b>정답:</b> ${esc(p.answer||'')}</p>
+      <p><b>쉬운 풀이:</b> ${esc(p.method1||'')}</p><p><b>다른 풀이:</b> ${esc(p.method2||'')}</p>
+      <p><b>힌트 1:</b> ${esc(p.hint1||'')}</p><p><b>힌트 2:</b> ${esc(p.hint2||'')}</p>
+      <p><b>개념:</b> ${(p.concepts||[]).map(esc).join(', ')}</p>
+      <p><b>비슷한 문제:</b> ${esc(p.similar||'')}</p></article>`;
+    }
+    $('result').innerHTML=h;
+  }catch(e){ $('status').textContent='❌ '+e.message; }
+  finally{btn.disabled=false;btn.textContent='🤖 AI로 분석하기';}
+});
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+</script></body></html>

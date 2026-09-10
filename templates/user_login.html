@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 문제집 로그인</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main class="card small"><h1>📚 AI 문제집</h1>
+<form method="post" action="/login" onsubmit="this.querySelector('button').disabled=true">
+<input name="username" placeholder="아이디" autocomplete="username" required>
+<input name="password" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+<button type="submit">로그인</button></form>
+{% if error %}<p class="err">{{error}}</p>{% endif %}
+<p class="muted">관리자가 만든 계정으로 로그인하세요.</p></main></body></html>
