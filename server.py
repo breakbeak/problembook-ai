@@ -7,7 +7,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("ADMIN_SESSION_SECRET", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
-MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.6-luna")
+MODEL = os.environ.get("OPENROUTER_MODEL", "openrouter/free")
 DATA_DIR = pathlib.Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_FILE = DATA_DIR / "app.db"
@@ -50,7 +50,7 @@ init_db()
 
 def get_api_key():
     # Environment variable is the first choice for hosted deployments.
-    env=os.environ.get("OPENAI_API_KEY","").strip()
+    env=os.environ.get("OPENROUTER_API_KEY","").strip()
     if env:
         return env
     c=db()
@@ -142,7 +142,7 @@ def test_key():
     if not key:
         return jsonify(ok=False,error="먼저 API 키를 저장해 주세요."),400
     try:
-        client=OpenAI(api_key=key)
+        client=OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1")
         r=client.responses.create(model=MODEL,input="Reply with exactly: OK")
         return jsonify(ok=True,result=r.output_text.strip())
     except Exception as e:
@@ -180,7 +180,7 @@ def analyze():
     temp_paths=[]
     try:
         content=[]
-        client=OpenAI(api_key=key)
+        client=OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1")
         for f in files:
             if not f.filename: continue
             ext=pathlib.Path(f.filename).suffix.lower()
