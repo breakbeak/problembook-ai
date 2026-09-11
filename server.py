@@ -6,7 +6,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("ADMIN_SESSION_SECRET", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
-MODEL = os.environ.get("OPENROUTER_MODEL", "openrouter/free")
+MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DATA_DIR = pathlib.Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -71,7 +71,7 @@ def admin_required():
     return session.get("admin") is True
 
 
-def openrouter_request(key, messages, max_tokens=3000):
+def openrouter_request(key, messages, max_tokens=3000, json_mode=False):
     headers = {
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
@@ -79,6 +79,8 @@ def openrouter_request(key, messages, max_tokens=3000):
         "X-Title": "AI Problembook",
     }
     payload = {"model": MODEL, "messages": messages, "max_tokens": max_tokens}
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
     r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=180)
     try:
         data = r.json()
@@ -88,17 +90,17 @@ def openrouter_request(key, messages, max_tokens=3000):
         err = data.get("error", {})
         raise RuntimeError(err.get("message") or f"OpenRouter 오류 ({r.status_code})")
     try:
-        content = data["choices"][0]["message"]["content"]
-        if isinstance(content, str):
+        message = data["choices"][0]["message"]
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
             return content
         if isinstance(content, list):
-            parts = []
-            for item in content:
-                if isinstance(item, dict) and isinstance(item.get("text"), str):
-                    parts.append(item["text"])
-            if parts:
+            parts = [item.get("text", "") for item in content if isinstance(item, dict) and isinstance(item.get("text"), str)]
+            if any(parts):
                 return "\n".join(parts)
-        raise ValueError
+        raise RuntimeError("AI가 빈 응답을 반환했습니다. 잠시 후 다시 시도해 주세요.")
+    except RuntimeError:
+        raise
     except Exception:
         raise RuntimeError("AI 응답 형식이 올바르지 않습니다.")
 
@@ -239,7 +241,7 @@ def test_key():
     if not key:
         return jsonify(ok=False, error="먼저 API 키를 저장해 주세요."), 400
     try:
-        raw = openrouter_request(key, [{"role": "user", "content": "Reply with exactly: OK"}], max_tokens=10)
+        raw = openrouter_request(key, [{"role": "user", "content": "Reply with exactly: OK"}], max_tokens=100)
         return jsonify(ok=True, result=raw.strip())
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 400
@@ -314,7 +316,7 @@ def analyze():
             return jsonify(error="읽을 수 있는 파일 내용이 없습니다."), 400
 
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt}] + content}]
-        raw = openrouter_request(key, messages, max_tokens=6000)
+        raw = openrouter_request(key, messages, max_tokens=6000, json_mode=True)
         data = clean_json_text(raw)
         return jsonify(data)
     except Exception as e:
