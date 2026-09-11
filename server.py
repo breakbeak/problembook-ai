@@ -76,7 +76,7 @@ def openrouter_request(key, messages, max_tokens=3000):
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://problembook-ai.onrender.com",
-        "X-Title": "AI 문제집",
+        "X-Title": "AI Problembook",
     }
     payload = {"model": MODEL, "messages": messages, "max_tokens": max_tokens}
     r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=120)
