@@ -7,6 +7,7 @@ app.secret_key = os.environ.get("ADMIN_SESSION_SECRET", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
 MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
+FALLBACK_MODEL = "openrouter/free"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DATA_DIR = pathlib.Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -71,16 +72,17 @@ def admin_required():
     return session.get("admin") is True
 
 
-def openrouter_request(key, messages, max_tokens=3000, json_mode=False):
+def openrouter_request(key, messages, max_tokens=3000, json_mode=False, model=None):
     headers = {
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
+        "Accept": "application/json",
         "HTTP-Referer": "https://problembook-ai.onrender.com",
         "X-Title": "AI Problembook",
     }
-    payload = {"model": MODEL, "messages": messages, "max_tokens": max_tokens}
-    if json_mode:
-        payload["response_format"] = {"type": "json_object"}
+    payload = {"model": model or MODEL, "messages": messages, "max_tokens": max_tokens}
+    # Some free providers reject response_format even though the model itself supports JSON.
+    # We therefore rely on the prompt and parse the returned JSON locally.
     r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=180)
     try:
         data = r.json()
@@ -88,7 +90,8 @@ def openrouter_request(key, messages, max_tokens=3000, json_mode=False):
         raise RuntimeError(f"OpenRouter 응답 오류 ({r.status_code}): {r.text[:500]}")
     if r.status_code >= 400:
         err = data.get("error", {})
-        raise RuntimeError(err.get("message") or f"OpenRouter 오류 ({r.status_code})")
+        msg = err.get("message") if isinstance(err, dict) else None
+        raise RuntimeError(msg or f"OpenRouter 오류 ({r.status_code})")
     try:
         message = data["choices"][0]["message"]
         content = message.get("content")
@@ -316,9 +319,17 @@ def analyze():
             return jsonify(error="읽을 수 있는 파일 내용이 없습니다."), 400
 
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt}] + content}]
-        raw = openrouter_request(key, messages, max_tokens=6000, json_mode=True)
-        data = clean_json_text(raw)
-        return jsonify(data)
+        # Try the selected free vision model first. If its upstream provider is temporarily
+        # unavailable, retry once and then fall back to OpenRouter's free router.
+        last_error = None
+        for model in (MODEL, MODEL, FALLBACK_MODEL):
+            try:
+                raw = openrouter_request(key, messages, max_tokens=6000, model=model)
+                data = clean_json_text(raw)
+                return jsonify(data)
+            except Exception as e:
+                last_error = e
+        raise RuntimeError(str(last_error) if last_error else "AI 분석에 실패했습니다.")
     except Exception as e:
         return jsonify(error=str(e)), 500
     finally:
