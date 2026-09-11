@@ -79,7 +79,7 @@ def openrouter_request(key, messages, max_tokens=3000):
         "X-Title": "AI Problembook",
     }
     payload = {"model": MODEL, "messages": messages, "max_tokens": max_tokens}
-    r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=120)
+    r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=180)
     try:
         data = r.json()
     except Exception:
@@ -88,7 +88,17 @@ def openrouter_request(key, messages, max_tokens=3000):
         err = data.get("error", {})
         raise RuntimeError(err.get("message") or f"OpenRouter 오류 ({r.status_code})")
     try:
-        return data["choices"][0]["message"]["content"]
+        content = data["choices"][0]["message"]["content"]
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    parts.append(item["text"])
+            if parts:
+                return "\n".join(parts)
+        raise ValueError
     except Exception:
         raise RuntimeError("AI 응답 형식이 올바르지 않습니다.")
 
